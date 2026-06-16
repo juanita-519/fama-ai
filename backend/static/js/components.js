@@ -254,13 +254,23 @@ export function HeroSection() {
 
 // 2. Stock Selection Panel
 export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }) {
+  const [customTicker, setCustomTicker] = useState("");
+
+  const handleCustomAnalyze = (e) => {
+    e.preventDefault();
+    if (customTicker.trim()) {
+      onSelect(customTicker.trim().toUpperCase());
+    }
+  };
+
   return React.createElement("div", { className: "glass-panel p-6 shadow-xl border border-gray-800/80 mb-6 animate-slide-up" },
     React.createElement("h3", { className: "text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2" },
       React.createElement(Icons.Database, { className: "w-4 h-4 text-indigo-400" }),
       " Select Analysis Target"
     ),
-    React.createElement("div", { className: "flex flex-col sm:flex-row gap-4 items-stretch sm:items-center" },
-      React.createElement("div", { className: "flex-1 relative" },
+    React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-12 gap-4 items-center" },
+      // Dropdown column
+      React.createElement("div", { className: "md:col-span-5 relative" },
         React.createElement("select", {
           value: selectedStock || "",
           onChange: (e) => onSelect(e.target.value),
@@ -271,12 +281,21 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
           React.createElement("option", { value: "upload" }, "Upload Custom Factor Dataset (.csv, .xlsx)")
         )
       ),
-      React.createElement("button", {
-        onClick: onUploadClick,
-        className: "flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-medium px-5 py-2.5 rounded-lg text-sm shadow-lg shadow-indigo-600/10 transition-all active:scale-95 border border-indigo-500/20"
-      },
-        React.createElement(Icons.Upload, { className: "w-4 h-4" }),
-        " Upload Custom CSV"
+      // OR divider
+      React.createElement("div", { className: "md:col-span-1 text-center text-xs font-bold text-gray-500 uppercase" }, "or"),
+      // Custom ticker input
+      React.createElement("form", { onSubmit: handleCustomAnalyze, className: "md:col-span-6 flex gap-2" },
+        React.createElement("input", {
+          type: "text",
+          placeholder: "Enter Ticker Symbol (e.g. RELIANCE, TCS, AAPL)",
+          value: customTicker,
+          onChange: (e) => setCustomTicker(e.target.value),
+          className: "flex-1 bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition-all"
+        }),
+        React.createElement("button", {
+          type: "submit",
+          className: "bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-all active:scale-95 border border-indigo-500/20 whitespace-nowrap"
+        }, "Analyze Ticker")
       )
     )
   );

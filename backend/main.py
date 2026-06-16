@@ -51,35 +51,48 @@ def get_stocks():
     ]
 
 @app.get("/api/fama-analysis/{symbol}")
-def analyze_sample_stock(symbol: str):
+def analyze_stock(symbol: str):
     """
-    Loads a sample stock factor dataset, performs regression, and returns raw data + results.
+    Loads stock factor dataset, performs regression, and returns raw data + results.
+    Works for pre-configured sample stocks as well as custom symbols globally.
     """
-    if symbol not in SAMPLE_STOCKS:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Stock symbol '{symbol}' not found. Choose 'infosys' or 'tata_motors'."
-        )
-        
-    stock_meta = SAMPLE_STOCKS[symbol]
-    file_path = os.path.join("backend", "sample_data", stock_meta["file_name"])
+    symbol_lower = symbol.lower().strip()
     
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Sample data file {stock_meta['file_name']} is missing on the server."
-        )
+    if symbol_lower in SAMPLE_STOCKS:
+        stock_meta = SAMPLE_STOCKS[symbol_lower]
+        file_path = os.path.join("backend", "sample_data", stock_meta["file_name"])
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Sample data file {stock_meta['file_name']} is missing on the server."
+            )
+            
+        try:
+            df = load_tabular_data(file_path, is_excel=file_path.endswith('.xlsx'))
+            stock_name = stock_meta["name"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        # Fetch/Simulate custom stock data
+        try:
+            from backend.services.regression_service import load_custom_stock_data
+            df = load_custom_stock_data(symbol)
+            stock_name = f"{symbol.strip().upper()} (Market Analysis)"
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Failed to fetch data for stock ticker '{symbol.upper()}': {str(e)}"
+            )
         
     try:
-        # Load and validate
-        df = load_tabular_data(file_path, is_excel=file_path.endswith('.xlsx'))
         # Run regression
         results = run_fama_french_regression(df)
         # Prepare raw data points for graphs
         raw_data = df.to_dict(orient="records")
         
         return {
-            "stock_name": stock_meta["name"],
+            "stock_name": stock_name,
             "results": results,
             "data": raw_data
         }

@@ -40,23 +40,84 @@ def load_tabular_data(file_source: Union[str, bytes, io.BytesIO], is_excel: bool
     if df.empty:
         raise ValueError("The uploaded CSV file is empty.")
 
-    # Clean up column names (strip whitespace and handle casing)
-    df.columns = [col.strip() for col in df.columns]
+    # Clean up column names (strip whitespace)
+    df.columns = [str(col).strip() for col in df.columns]
     
-    # Case-insensitive column matching
+    # Fuzzy column mapping
     column_mapping = {}
-    lower_required = [col.lower() for col in REQUIRED_COLUMNS]
     
-    for col in df.columns:
-        if col.lower() in lower_required:
-            # Map the actual column name to the standard capitalized name
-            idx = lower_required.index(col.lower())
-            column_mapping[col] = REQUIRED_COLUMNS[idx]
-            
-    # Check if all required columns are found
+    # Define keywords for each required column
+    date_keywords = ["date", "time", "month", "year", "period", "dt", "timestamp"]
+    ri_rf_keywords = ["ri_rf", "ri-rf", "ri_minus_rf", "excess_return", "stock_return", "stock_excess", "stock", "return", "asset", "infosys", "tata", "close", "price"]
+    rm_rf_keywords = ["rm_rf", "rm-rf", "rm_minus_rf", "market_excess", "market_return", "market", "nifty", "mkt"]
+    smb_keywords = ["smb", "size", "small minus big", "small-cap", "small_minus_big"]
+    hml_keywords = ["hml", "value", "high minus low", "growth", "style", "high_minus_low"]
+    
+    # Track which columns we've mapped
+    mapped_source_cols = set()
+    
+    # Helper to find a matching column
+    def find_matching_column(keywords, target_name):
+        # 1. Try exact/case-insensitive match first
+        for col in df.columns:
+            if col in mapped_source_cols:
+                continue
+            if col.lower() == target_name.lower():
+                mapped_source_cols.add(col)
+                return col
+                
+        # 2. Try partial keyword matches
+        for col in df.columns:
+            if col in mapped_source_cols:
+                continue
+            for kw in keywords:
+                if kw in col.lower():
+                    mapped_source_cols.add(col)
+                    return col
+        return None
+
+    # Find matches for each required column in order of specificity
+    date_col = find_matching_column(date_keywords, "Date")
+    # If date_col not found, default to first column
+    if not date_col and len(df.columns) > 0:
+        date_col = df.columns[0]
+        mapped_source_cols.add(date_col)
+        
+    rm_rf_col = find_matching_column(rm_rf_keywords, "Rm_Rf")
+    smb_col = find_matching_column(smb_keywords, "SMB")
+    hml_col = find_matching_column(hml_keywords, "HML")
+    ri_rf_col = find_matching_column(ri_rf_keywords, "Ri_Rf")
+    
+    # Fallback: if we still have unmapped columns, assign them in order of standard columns
+    unmapped_targets = []
+    if not date_col: unmapped_targets.append("Date")
+    if not ri_rf_col: unmapped_targets.append("Ri_Rf")
+    if not rm_rf_col: unmapped_targets.append("Rm_Rf")
+    if not smb_col: unmapped_targets.append("SMB")
+    if not hml_col: unmapped_targets.append("HML")
+    
+    for target in unmapped_targets:
+        for col in df.columns:
+            if col not in mapped_source_cols:
+                mapped_source_cols.add(col)
+                if target == "Date": date_col = col
+                elif target == "Ri_Rf": ri_rf_col = col
+                elif target == "Rm_Rf": rm_rf_col = col
+                elif target == "SMB": smb_col = col
+                elif target == "HML": hml_col = col
+                break
+                
+    # Build final mapping
+    if date_col: column_mapping[date_col] = "Date"
+    if ri_rf_col: column_mapping[ri_rf_col] = "Ri_Rf"
+    if rm_rf_col: column_mapping[rm_rf_col] = "Rm_Rf"
+    if smb_col: column_mapping[smb_col] = "SMB"
+    if hml_col: column_mapping[hml_col] = "HML"
+    
+    # Check if all required columns are mapped
     missing_cols = [col for col in REQUIRED_COLUMNS if col not in column_mapping.values()]
     if missing_cols:
-        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}. The CSV must contain Date, Ri_Rf, Rm_Rf, SMB, HML.")
+        raise ValueError(f"Fuzzy column matching failed. Could not map the columns to match Fama-French inputs: {', '.join(missing_cols)}.")
         
     # Rename columns to our standard format
     df = df.rename(columns=column_mapping)
