@@ -1,0 +1,287 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+
+/* HTML scroll behavior for smooth transition from hero to dashboard */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Main Body Configuration */
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #030712; /* Slate-950 equivalent */
+  color: #f3f4f6; /* Gray-100 equivalent */
+  overflow-x: hidden;
+}
+
+/* Headings font */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Monospace stats/math font */
+.mono-font {
+  font-family: 'Fira Code', monospace;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Glassmorphism Styles */
+.glass-panel {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  transform: translateY(-2px);
+  background: rgba(17, 24, 39, 0.85);
+  border-color: rgba(99, 102, 241, 0.3) !important; /* Indigo glow on hover */
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 
+              0 0 20px 0 rgba(99, 102, 241, 0.08);
+}
+
+/* Glowing Neon Elements */
+.glow-text-indigo {
+  text-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+}
+
+.glow-text-emerald {
+  text-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+}
+
+.glow-text-cyan {
+  text-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+}
+
+/* Gradient Borders */
+.gradient-border-indigo {
+  position: relative;
+  border-radius: 1rem;
+  background: linear-gradient(to right, #6366f1, #3b82f6);
+  padding: 1px;
+}
+
+.gradient-border-content {
+  background: #0f172a;
+  border-radius: 15px;
+}
+
+/* Glowing card borders for active selected targets */
+.glow-border-indigo {
+  box-shadow: 0 0 20px 1px rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Emerald Pulsing Button Glow */
+.pulse-glow-emerald {
+  animation: pulseEmerald 2s infinite;
+}
+
+@keyframes pulseEmerald {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* Gradient Text Highlights */
+.gradient-text {
+  background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Subtle Card Gradient Overlays */
+.card-gradient-overlay {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+/* Blinking Typewriter Cursor */
+.cursor-blink {
+  animation: cursorBlink 0.8s infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* Radial Glow Background Orb for Hero Landing */
+.bg-gradient-orb {
+  position: absolute;
+  width: 650px;
+  height: 650px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(34, 211, 238, 0.03) 50%, rgba(0,0,0,0) 100%);
+  filter: blur(80px);
+  z-index: 0;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Floating animation for Scroll Chevron */
+.animate-bounce-slow {
+  animation: bounceSlow 2s infinite;
+}
+
+@keyframes bounceSlow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Table styles */
+.styled-table th {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+/* Plotly customization overrides */
+.js-plotly-plot .plotly .modebar {
+  background-color: transparent !important;
+}
+
+.js-plotly-plot .plotly .user-select-none {
+  cursor: default !important;
+}
+
+/* Plotly range slider styling override */
+.js-plotly-plot .plotly .slider-container {
+  font-size: 10px !important;
+}
+
+/* Animations for Dashboard Name Title Sequence */
+.letter-zoom-fade {
+  animation: letterZoomFade 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  display: inline-block;
+}
+
+@keyframes letterZoomFade {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-15deg);
+    filter: blur(8px);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.15) rotate(5deg);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    filter: blur(0);
+  }
+}
+
+.word-glow-in {
+  animation: wordGlowIn 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  display: inline-block;
+  background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes wordGlowIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+    filter: blur(12px);
+    text-shadow: 0 0 0px rgba(99, 102, 241, 0);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1.02);
+    filter: blur(0);
+    text-shadow: 0 0 15px rgba(99, 102, 241, 0.4), 0 0 30px rgba(34, 211, 238, 0.2);
+  }
+  15%, 85% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+    text-shadow: 0 0 30px rgba(99, 102, 241, 0.7), 0 0 60px rgba(34, 211, 238, 0.4), 0 0 90px rgba(99, 102, 241, 0.2);
+  }
+  95% {
+    opacity: 0.2;
+    transform: scale(1.03);
+    filter: blur(4px);
+    text-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+    filter: blur(15px);
+    text-shadow: 0 0 0px rgba(99, 102, 241, 0);
+  }
+}
+
+/* Make sure the container holds the height during animation to avoid layout shifts */
+.title-container-fixed {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAMA AI – Fama-French 3-Factor Stock Analysis Platform</title>
+
+  <!-- Global Error Handler to Diagnose Startup Crashes -->
+  <script>
+    window.addEventListener('error', function(e) {
+      var root = document.getElementById('root');
+      if (root) {
+        root.innerHTML = `
+          <div class="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-sans">
+            <div class="max-w-xl w-full bg-rose-950/20 border border-rose-500/30 p-6 rounded-xl text-rose-200">
+              <h3 class="text-lg font-bold mb-2 text-rose-400">⚠️ Front-End Runtime Error</h3>
+              <p class="text-sm font-semibold mb-1">Message: ${e.message}</p>
+              <p class="text-xs font-mono text-gray-400">File: ${e.filename} (Line ${e.lineno}, Col ${e.colno})</p>
+              <p class="text-xs text-gray-500 mt-4 leading-relaxed">Please send this error report back to Antigravity so we can resolve it immediately.</p>
+            </div>
+          </div>
+        `;
+      }
+    });
+  </script>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="An academic equity research tool that automates Fama-French 3-Factor OLS regression analysis on NIFTY 50 stock datasets.">
+  <meta name="keywords" content="Fama-French, Stock Analysis, OLS Regression, NIFTY 50, Finance, MBA Project, BTech Project">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Tailwind Configuration for Slate overrides and custom styles -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              950: '#030712',
+              900: '#0f172a',
+              850: '#111827',
+              800: '#1e293b',
+              700: '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="/css/styles.css">
+  
+  <!-- React & React DOM CDNs -->
+  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+
+  <!-- Plotly.js CDN -->
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js" charset="utf-8"></script>
+</head>
+<body class="bg-slate-950 text-gray-100 min-h-screen">
+  
+  <!-- React App Mount Point -->
+  <div id="root">
+    <!-- Server-Side Pre-loader for Premium First Impression -->
+    <div class="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-gray-100">
+      <div class="flex flex-col items-center gap-4 animate-pulse">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <svg class="w-7 h-7 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        </div>
+        <div class="text-center">
+          <h2 class="text-lg font-bold tracking-wider text-white uppercase font-sans">FAMA AI</h2>
+          <p class="text-xs text-gray-500 font-mono mt-1">Bootstrapping Client Components...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Modular Application Entrypoint -->
+  <script type="module" src="/js/app.js"></script>
+
+</body>
+</html>
