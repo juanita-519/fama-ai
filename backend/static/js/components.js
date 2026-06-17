@@ -254,7 +254,81 @@ export function HeroSection() {
 
 // 2. Stock Selection Panel
 export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }) {
+  const [marketStock, setMarketStock] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
   const [customTicker, setCustomTicker] = useState("");
+
+  const POPULAR_STOCKS = [
+    { id: "RELIANCE", name: "Reliance Industries (RELIANCE)" },
+    { id: "TCS", name: "Tata Consultancy Services (TCS)" },
+    { id: "HDFCBANK", name: "HDFC Bank (HDFCBANK)" },
+    { id: "BHARTIARTL", name: "Bharti Airtel (BHARTIARTL)" },
+    { id: "ICICIBANK", name: "ICICI Bank (ICICIBANK)" },
+    { id: "INFY", name: "Infosys Limited (INFY)" },
+    { id: "SBIN", name: "State Bank of India (SBIN)" },
+    { id: "ITC", name: "ITC Limited (ITC)" },
+    { id: "HINDUNILVR", name: "Hindustan Unilever (HINDUNILVR)" },
+    { id: "LT", name: "Larsen & Toubro (LT)" },
+    { id: "BAJFINANCE", name: "Bajaj Finance (BAJFINANCE)" },
+    { id: "HCLTECH", name: "HCL Technologies (HCLTECH)" },
+    { id: "MARUTI", name: "Maruti Suzuki (MARUTI)" },
+    { id: "SUNPHARMA", name: "Sun Pharmaceutical (SUNPHARMA)" },
+    { id: "ADANIENT", name: "Adani Enterprises (ADANIENT)" },
+    { id: "KOTAKBANK", name: "Kotak Mahindra Bank (KOTAKBANK)" },
+    { id: "AXISBANK", name: "Axis Bank (AXISBANK)" },
+    { id: "TITAN", name: "Titan Company (TITAN)" },
+    { id: "ULTRACEMCO", name: "UltraTech Cement (ULTRACEMCO)" },
+    { id: "NTPC", name: "NTPC Limited (NTPC)" },
+    { id: "JSWSTEEL", name: "JSW Steel (JSWSTEEL)" },
+    { id: "M&M", name: "Mahindra & Mahindra (M&M)" },
+    { id: "POWERGRID", name: "Power Grid Corporation (POWERGRID)" },
+    { id: "ASIANPAINT", name: "Asian Paints (ASIANPAINT)" },
+    { id: "COALINDIA", name: "Coal India (COALINDIA)" },
+    { id: "ADANIPORTS", name: "Adani Ports & SEZ (ADANIPORTS)" },
+    { id: "BAJAJFINSV", name: "Bajaj Finserv (BAJAJFINSV)" },
+    { id: "TATASTEEL", name: "Tata Steel (TATASTEEL)" },
+    { id: "NESTLEIND", name: "Nestle India (NESTLEIND)" },
+    { id: "DRREDDY", name: "Dr. Reddy's Laboratories (DRREDDY)" },
+    { id: "GRASIM", name: "Grasim Industries (GRASIM)" },
+    { id: "ONGC", name: "Oil & Natural Gas Corporation (ONGC)" },
+    { id: "CIPLA", name: "Cipla (CIPLA)" },
+    { id: "HDFCLIFE", name: "HDFC Life Insurance (HDFCLIFE)" },
+    { id: "HINDALCO", name: "Hindalco Industries (HINDALCO)" },
+    { id: "TECHM", name: "Tech Mahindra (TECHM)" },
+    { id: "BRITANNIA", name: "Britannia Industries (BRITANNIA)" },
+    { id: "WIPRO", name: "Wipro Limited (WIPRO)" },
+    { id: "SBILIFE", name: "SBI Life Insurance (SBILIFE)" },
+    { id: "BPCL", name: "Bharat Petroleum (BPCL)" },
+    { id: "EICHERMOT", name: "Eicher Motors (EICICHERMOT)" },
+    { id: "DIVISLAB", name: "Divi's Laboratories (DIVISLAB)" },
+    { id: "LTIM", name: "LTIMindtree (LTIM)" },
+    { id: "BAJAJ-AUTO", name: "Bajaj Auto (BAJAJ-AUTO)" },
+    { id: "HEROMOTOCO", name: "Hero MotoCorp (HEROMOTOCO)" },
+    { id: "SHRIRAMFIN", name: "Shriram Finance (SHRIRAMFIN)" },
+    { id: "APOLLOHOSP", name: "Apollo Hospitals (APOLLOHOSP)" },
+    { id: "TATACONSUM", name: "Tata Consumer Products (TATACONSUM)" },
+    { id: "JIOFIN", name: "Jio Financial Services (JIOFIN)" },
+    // Global US Stocks
+    { id: "AAPL", name: "Apple Inc. (AAPL)" },
+    { id: "MSFT", name: "Microsoft Corp. (MSFT)" },
+    { id: "NVDA", name: "NVIDIA Corp. (NVDA)" },
+    { id: "TSLA", name: "Tesla Inc. (TSLA)" },
+    { id: "GOOGL", name: "Alphabet Inc. (GOOGL)" },
+    { id: "AMZN", name: "Amazon.com Inc. (AMZN)" }
+  ];
+
+  const handleMarketSelect = (e) => {
+    const val = e.target.value;
+    setMarketStock(val);
+    if (val === "CUSTOM") {
+      setShowManualInput(true);
+    } else {
+      setShowManualInput(false);
+      if (val) {
+        onSelect(val);
+      }
+    }
+  };
 
   const handleCustomAnalyze = (e) => {
     e.preventDefault();
@@ -269,33 +343,54 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
       " Select Analysis Target"
     ),
     React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-12 gap-4 items-center" },
-      // Dropdown column
+      // Dropdown column 1 (Pre-loaded / Local Upload)
       React.createElement("div", { className: "md:col-span-5 relative" },
         React.createElement("select", {
           value: selectedStock || "",
           onChange: (e) => onSelect(e.target.value),
           className: "w-full bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm font-medium transition-all"
         },
-          React.createElement("option", { value: "", disabled: true }, "-- Select a NIFTY 50 Stock --"),
+          React.createElement("option", { value: "", disabled: true }, "-- Local Sample Stocks & Uploads --"),
           stocks.map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
           React.createElement("option", { value: "upload" }, "Upload Custom Factor Dataset (.csv, .xlsx)")
         )
       ),
+      
       // OR divider
       React.createElement("div", { className: "md:col-span-1 text-center text-xs font-bold text-gray-500 uppercase" }, "or"),
-      // Custom ticker input
-      React.createElement("form", { onSubmit: handleCustomAnalyze, className: "md:col-span-6 flex gap-2" },
-        React.createElement("input", {
-          type: "text",
-          placeholder: "Enter Ticker Symbol (e.g. RELIANCE, TCS, AAPL)",
-          value: customTicker,
-          onChange: (e) => setCustomTicker(e.target.value),
-          className: "flex-1 bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition-all"
-        }),
-        React.createElement("button", {
-          type: "submit",
-          className: "bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-all active:scale-95 border border-indigo-500/20 whitespace-nowrap"
-        }, "Analyze Ticker")
+      
+      // Dropdown column 2 (Popular Market Stocks)
+      React.createElement("div", { className: "md:col-span-6 flex flex-col gap-2" },
+        React.createElement("div", { className: "flex gap-2" },
+          React.createElement("select", {
+            value: marketStock,
+            onChange: handleMarketSelect,
+            className: "flex-1 bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm font-medium transition-all"
+          },
+            React.createElement("option", { value: "" }, "-- Select Ticker from Market --"),
+            POPULAR_STOCKS.map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
+            React.createElement("option", { value: "CUSTOM" }, "Other (Type ticker manually...)")
+          ),
+          !showManualInput && React.createElement("button", {
+            onClick: () => { if (marketStock && marketStock !== "CUSTOM") onSelect(marketStock); },
+            className: "bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-all active:scale-95 border border-indigo-500/20 whitespace-nowrap"
+          }, "Analyze Ticker")
+        ),
+        
+        // Manual input form when CUSTOM is selected
+        showManualInput && React.createElement("form", { onSubmit: handleCustomAnalyze, className: "flex gap-2 mt-2 animate-slide-up" },
+          React.createElement("input", {
+            type: "text",
+            placeholder: "Enter Ticker Symbol (e.g. RELIANCE, TCS, AAPL)",
+            value: customTicker,
+            onChange: (e) => setCustomTicker(e.target.value),
+            className: "flex-1 bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition-all"
+          }),
+          React.createElement("button", {
+            type: "submit",
+            className: "bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-all active:scale-95 border border-indigo-500/20"
+          }, "Analyze Ticker")
+        )
       )
     )
   );
