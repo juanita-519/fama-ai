@@ -299,7 +299,7 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
     { id: "WIPRO", name: "Wipro Limited (WIPRO)" },
     { id: "SBILIFE", name: "SBI Life Insurance (SBILIFE)" },
     { id: "BPCL", name: "Bharat Petroleum (BPCL)" },
-    { id: "EICHERMOT", name: "Eicher Motors (EICICHERMOT)" },
+    { id: "EICHERMOT", name: "Eicher Motors (EICHERMOT)" },
     { id: "DIVISLAB", name: "Divi's Laboratories (DIVISLAB)" },
     { id: "LTIM", name: "LTIMindtree (LTIM)" },
     { id: "BAJAJ-AUTO", name: "Bajaj Auto (BAJAJ-AUTO)" },
