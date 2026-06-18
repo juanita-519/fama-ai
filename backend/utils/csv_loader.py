@@ -1,31 +1,190 @@
 import pandas as pd
 import io
-from typing import Union
+import os
+from typing import Union, List, Dict, Any
 
 REQUIRED_COLUMNS = ["Date", "Ri_Rf", "Rm_Rf", "SMB", "HML"]
 
-def load_tabular_data(file_source: Union[str, bytes, io.BytesIO], is_excel: bool = False) -> pd.DataFrame:
+# Equivalent column name mapping dictionary
+COLUMN_KEYWORDS = {
+    "Date": ["date", "trading date", "trade date", "timestamp", "day", "dt", "period"],
+    "Close": ["close", "closing price", "adj close", "adjusted close", "last price", "close price"],
+    "Open": ["open", "opening price"],
+    "High": ["high", "high price"],
+    "Low": ["low", "low price"],
+    "Volume": ["volume", "total volume", "traded volume", "shares traded"],
+    "Ticker": ["ticker", "symbol", "stock symbol", "company code"],
+    "Ri_Rf": ["ri_rf", "ri-rf", "ri_minus_rf", "excess_return", "stock_return", "stock_excess", "stock return", "return"],
+    "Rm_Rf": ["rm_rf", "rm-rf", "rm_minus_rf", "market_excess", "market_return", "market factor", "market", "nifty", "mkt"],
+    "SMB": ["smb", "size", "small minus big", "small-cap", "small_minus_big"],
+    "HML": ["hml", "value", "high minus low", "growth", "style", "high_minus_low"]
+}
+
+def inspect_excel_sheets(file_bytes: bytes) -> List[str]:
     """
-    Loads and validates a Fama-French CSV or Excel dataset.
+    Returns list of sheet names in an Excel file.
+    """
+    try:
+        xl = pd.ExcelFile(io.BytesIO(file_bytes))
+        return xl.sheet_names
+    except Exception as e:
+        raise ValueError(f"Failed to inspect Excel sheets: {str(e)}")
+
+def detect_columns(headers: List[str]) -> Dict[str, str]:
+    """
+    Fuzzy maps list of raw headers to standard Fama-French/financial columns.
+    Returns a dict mapping standard column names to raw headers.
+    """
+    detected = {}
+    used_headers = set()
     
-    Parameters:
-        file_source: Can be a file path (str), raw bytes (from file upload), or a BytesIO stream.
-        is_excel: Boolean flag to load Excel (.xlsx) instead of CSV.
+    # Create normalized representations mapping (original_header, normalized_lowercase_header)
+    normalized = []
+    for h in headers:
+        hc = str(h).strip()
+        hc_norm = hc.lower().replace("_", " ").replace("-", " ")
+        normalized.append((h, hc_norm))
+    
+    # 1. Exact/case-insensitive match on normalized
+    for target, keywords in COLUMN_KEYWORDS.items():
+        target_lower = target.lower().replace("_", " ")
+        for orig, norm in normalized:
+            if orig in used_headers:
+                continue
+            if norm == target_lower:
+                detected[target] = orig
+                used_headers.add(orig)
+                break
+                
+    # 2. Partial keyword matching on normalized
+    for target, keywords in COLUMN_KEYWORDS.items():
+        if target in detected:
+            continue
+        for orig, norm in normalized:
+            if orig in used_headers:
+                continue
+            for kw in keywords:
+                kw_clean = kw.lower().replace("_", " ").replace("-", " ")
+                if kw_clean in norm:
+                    detected[target] = orig
+                    used_headers.add(orig)
+                    break
+            if target in detected:
+                break
+                
+    return detected
+
+def load_mapped_data(df: pd.DataFrame, mapping: Dict[str, str], merge_factors: bool = False) -> pd.DataFrame:
+    """
+    Applies column mapping on raw DataFrame, handles Close->Return calculation,
+    merges Fama-French factors if required/missing, and validates structures.
+    """
+    if df.empty:
+        raise ValueError("Dataset is empty.")
+
+    # Standardize headers (strip whitespace)
+    df.columns = [str(col).strip() for col in df.columns]
+
+    # Reverse the mapping dict to map raw_header -> standard_column
+    rev_mapping = {v: k for k, v in mapping.items() if v}
+    df = df.rename(columns=rev_mapping)
+
+    # 1. Validate Date column exists
+    if "Date" not in df.columns:
+        raise ValueError("Date column must be mapped and present.")
+
+    # 2. Parse Date
+    try:
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    except Exception as e:
+        raise ValueError(f"Error parsing Date column: {str(e)}")
+
+    df = df.dropna(subset=['Date'])
+    if df.empty:
+        raise ValueError("No valid parseable dates found in the Date column.")
+
+    # Format Date as YYYY-MM
+    df['Date'] = df['Date'].dt.strftime('%Y-%m')
+
+    # 3. Handle Ticker column if present
+    if "Ticker" in df.columns:
+        tickers = df["Ticker"].dropna().unique()
+        if len(tickers) > 1:
+            # Filter for the first ticker series to avoid mixing different stocks
+            first_ticker = tickers[0]
+            df = df[df["Ticker"] == first_ticker]
+
+    # 4. Calculate Ri_Rf if missing
+    if "Ri_Rf" not in df.columns:
+        if "Close" not in df.columns:
+            raise ValueError("Required column mapping missing: Map either 'Stock Excess Return (Ri_Rf)' or 'Close Price'.")
         
-    Returns:
-        pd.DataFrame containing columns: Date, Ri_Rf, Rm_Rf, SMB, HML
+        # Sort by Date to compute pct_change
+        df = df.sort_values("Date")
         
-    Raises:
-        ValueError: If required columns are missing, data is empty, or numeric columns contain non-numeric data.
+        try:
+            df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
+        except Exception:
+            raise ValueError("Close Price column contains non-numeric values.")
+        
+        df = df.dropna(subset=['Close'])
+        if len(df) < 4:
+            raise ValueError("Too few rows with valid Close Prices (minimum 4 required).")
+            
+        df['Return'] = df['Close'].pct_change()
+        # Monthly excess return = Return - Rf (0.0055 monthly)
+        df['Ri_Rf'] = df['Return'] - 0.0055
+        df = df.dropna(subset=['Ri_Rf'])
+    else:
+        try:
+            df['Ri_Rf'] = pd.to_numeric(df['Ri_Rf'], errors='coerce')
+        except Exception:
+            raise ValueError("Stock Excess Return (Ri_Rf) column contains non-numeric values.")
+        df = df.dropna(subset=['Ri_Rf'])
+
+    # 5. Handle factor mapping or merging
+    has_factors_in_file = all(col in df.columns for col in ["Rm_Rf", "SMB", "HML"])
+    
+    if merge_factors or not has_factors_in_file:
+        # Load platform Fama-French factors from sample database
+        factors_file = os.path.join("backend", "sample_data", "infosys.csv")
+        if not os.path.exists(factors_file):
+            raise FileNotFoundError("Baseline market factor database is missing on the server.")
+        factors_df = pd.read_csv(factors_file)
+        factors_df['Date'] = pd.to_datetime(factors_df['Date']).dt.strftime('%Y-%m')
+        
+        # Merge on Date
+        merged = pd.merge(factors_df[["Date", "Rm_Rf", "SMB", "HML"]], df[["Date", "Ri_Rf"]], on="Date", how="inner")
+        if len(merged) < 4:
+            raise ValueError("Insuffient overlapping dates between uploaded dataset and the platform factors database (minimum 4 monthly data points required).")
+        return merged[["Date", "Ri_Rf", "Rm_Rf", "SMB", "HML"]]
+    else:
+        # Validate and clean factor columns
+        for col in ["Rm_Rf", "SMB", "HML"]:
+            try:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            except Exception:
+                raise ValueError(f"Column '{col}' must contain only numeric values.")
+            df = df.dropna(subset=[col])
+            
+        if len(df) < 4:
+            raise ValueError("Insufficient valid data points remaining (minimum 4 required).")
+            
+        return df[["Date", "Ri_Rf", "Rm_Rf", "SMB", "HML"]].sort_values("Date")
+
+def load_tabular_data(file_source: Union[str, bytes, io.BytesIO], is_excel: bool = False, sheet_name: str = None) -> pd.DataFrame:
+    """
+    Loads Excel or CSV, runs auto column detection, and returns a verified DataFrame.
+    (Backward-compatible wrapper).
     """
     try:
         if is_excel:
             if isinstance(file_source, bytes):
-                df = pd.read_excel(io.BytesIO(file_source))
+                df = pd.read_excel(io.BytesIO(file_source), sheet_name=sheet_name if sheet_name else 0)
             elif isinstance(file_source, io.BytesIO):
-                df = pd.read_excel(file_source)
+                df = pd.read_excel(file_source, sheet_name=sheet_name if sheet_name else 0)
             else:
-                df = pd.read_excel(file_source)
+                df = pd.read_excel(file_source, sheet_name=sheet_name if sheet_name else 0)
         else:
             if isinstance(file_source, bytes):
                 df = pd.read_csv(io.BytesIO(file_source))
@@ -38,123 +197,18 @@ def load_tabular_data(file_source: Union[str, bytes, io.BytesIO], is_excel: bool
         raise ValueError(f"Failed to read {file_type} file: {str(e)}")
 
     if df.empty:
-        raise ValueError("The uploaded CSV file is empty.")
+        raise ValueError("The uploaded dataset is empty.")
 
-    # Clean up column names (strip whitespace)
-    df.columns = [str(col).strip() for col in df.columns]
+    # Run auto-detection
+    mapping = detect_columns(list(df.columns))
     
-    # Fuzzy column mapping
-    column_mapping = {}
+    # Auto-merge factors if they aren't all present in the file
+    merge_factors = not all(col in mapping for col in ["Rm_Rf", "SMB", "HML"])
     
-    # Define keywords for each required column
-    date_keywords = ["date", "time", "month", "year", "period", "dt", "timestamp"]
-    ri_rf_keywords = ["ri_rf", "ri-rf", "ri_minus_rf", "excess_return", "stock_return", "stock_excess", "stock", "return", "asset", "infosys", "tata", "close", "price"]
-    rm_rf_keywords = ["rm_rf", "rm-rf", "rm_minus_rf", "market_excess", "market_return", "market", "nifty", "mkt"]
-    smb_keywords = ["smb", "size", "small minus big", "small-cap", "small_minus_big"]
-    hml_keywords = ["hml", "value", "high minus low", "growth", "style", "high_minus_low"]
-    
-    # Track which columns we've mapped
-    mapped_source_cols = set()
-    
-    # Helper to find a matching column
-    def find_matching_column(keywords, target_name):
-        # 1. Try exact/case-insensitive match first
-        for col in df.columns:
-            if col in mapped_source_cols:
-                continue
-            if col.lower() == target_name.lower():
-                mapped_source_cols.add(col)
-                return col
-                
-        # 2. Try partial keyword matches
-        for col in df.columns:
-            if col in mapped_source_cols:
-                continue
-            for kw in keywords:
-                if kw in col.lower():
-                    mapped_source_cols.add(col)
-                    return col
-        return None
-
-    # Find matches for each required column in order of specificity
-    date_col = find_matching_column(date_keywords, "Date")
-    # If date_col not found, default to first column
-    if not date_col and len(df.columns) > 0:
-        date_col = df.columns[0]
-        mapped_source_cols.add(date_col)
-        
-    rm_rf_col = find_matching_column(rm_rf_keywords, "Rm_Rf")
-    smb_col = find_matching_column(smb_keywords, "SMB")
-    hml_col = find_matching_column(hml_keywords, "HML")
-    ri_rf_col = find_matching_column(ri_rf_keywords, "Ri_Rf")
-    
-    # Fallback: if we still have unmapped columns, assign them in order of standard columns
-    unmapped_targets = []
-    if not date_col: unmapped_targets.append("Date")
-    if not ri_rf_col: unmapped_targets.append("Ri_Rf")
-    if not rm_rf_col: unmapped_targets.append("Rm_Rf")
-    if not smb_col: unmapped_targets.append("SMB")
-    if not hml_col: unmapped_targets.append("HML")
-    
-    for target in unmapped_targets:
-        for col in df.columns:
-            if col not in mapped_source_cols:
-                mapped_source_cols.add(col)
-                if target == "Date": date_col = col
-                elif target == "Ri_Rf": ri_rf_col = col
-                elif target == "Rm_Rf": rm_rf_col = col
-                elif target == "SMB": smb_col = col
-                elif target == "HML": hml_col = col
-                break
-                
-    # Build final mapping
-    if date_col: column_mapping[date_col] = "Date"
-    if ri_rf_col: column_mapping[ri_rf_col] = "Ri_Rf"
-    if rm_rf_col: column_mapping[rm_rf_col] = "Rm_Rf"
-    if smb_col: column_mapping[smb_col] = "SMB"
-    if hml_col: column_mapping[hml_col] = "HML"
-    
-    # Check if all required columns are mapped
-    missing_cols = [col for col in REQUIRED_COLUMNS if col not in column_mapping.values()]
-    if missing_cols:
-        raise ValueError(f"Fuzzy column matching failed. Could not map the columns to match Fama-French inputs: {', '.join(missing_cols)}.")
-        
-    # Rename columns to our standard format
-    df = df.rename(columns=column_mapping)
-    
-    # Select only the required columns
-    df = df[REQUIRED_COLUMNS]
-    
-    # Drop rows where all elements are NaN
-    df = df.dropna(how='all')
-    
-    # Check if we have at least 3 rows to run OLS regression
-    if len(df) < 4:
-        raise ValueError("At least 4 data points are required to run the Fama-French 3-Factor regression.")
-
-    # Validate Date column
-    df['Date'] = df['Date'].astype(str).str.strip()
-    if df['Date'].isnull().any() or (df['Date'] == '').any():
-        raise ValueError("The 'Date' column contains empty or null values.")
-
-    # Validate numeric columns
-    numeric_cols = ["Ri_Rf", "Rm_Rf", "SMB", "HML"]
-    for col in numeric_cols:
-        try:
-            df[col] = pd.to_numeric(df[col])
-        except Exception:
-            raise ValueError(f"Column '{col}' must contain only numeric values.")
-            
-        # Drop rows where numeric columns are NaN
-        df = df.dropna(subset=[col])
-        
-    if len(df) < 4:
-        raise ValueError("Not enough valid numeric rows to perform regression analysis.")
-        
-    return df
+    return load_mapped_data(df, mapping, merge_factors=merge_factors)
 
 def load_csv(file_source: Union[str, bytes, io.BytesIO]) -> pd.DataFrame:
     """
-    Backward-compatible wrapper for load_tabular_data (CSV default).
+    Backward-compatible wrapper for load_tabular_data.
     """
     return load_tabular_data(file_source, is_excel=False)

@@ -252,70 +252,169 @@ export function HeroSection() {
 }
 
 
+// Levenshtein Distance for typo-tolerant fuzzy matching
+function levenshteinDistance(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+// Fuzzy Search algorithm
+function fuzzySearchStocks(query, stocksList) {
+  if (!query) return [];
+  const cleanQuery = query.trim().toLowerCase();
+  if (cleanQuery.length === 0) return [];
+
+  const queryTokens = cleanQuery.split(/\s+/);
+
+  const scored = stocksList.map(stock => {
+    const name = stock.name.toLowerCase();
+    const id = stock.id.toLowerCase();
+    const ticker = (stock.ticker || "").toLowerCase();
+
+    let score = 0;
+
+    // 1. Exact matches
+    if (id === cleanQuery || ticker === cleanQuery) {
+      score += 1000;
+    } else if (name === cleanQuery) {
+      score += 800;
+    }
+
+    // 2. Starts with query matches
+    if (id.startsWith(cleanQuery) || ticker.startsWith(cleanQuery)) {
+      score += 500;
+    } else if (name.startsWith(cleanQuery)) {
+      score += 400;
+    }
+
+    // 3. Substring matches
+    if (name.includes(cleanQuery)) {
+      score += 300;
+    } else if (ticker.includes(cleanQuery)) {
+      score += 200;
+    }
+
+    // 4. Token-based matching
+    const nameTokens = name.split(/[\s,.\-()]+/);
+    let tokenMatches = 0;
+    for (const qToken of queryTokens) {
+      let matched = false;
+      for (const nToken of nameTokens) {
+        if (nToken.startsWith(qToken)) {
+          score += 100;
+          matched = true;
+        } else if (nToken.includes(qToken)) {
+          score += 30;
+          matched = true;
+        }
+      }
+      if (matched) tokenMatches++;
+    }
+
+    // Extra score if all query tokens matched something
+    if (tokenMatches === queryTokens.length) {
+      score += 150;
+    }
+
+    // 5. Typo tolerance (Levenshtein distance)
+    if (cleanQuery.length >= 3) {
+      // Check ID distance
+      const idDist = levenshteinDistance(cleanQuery, id);
+      if (idDist <= 2) {
+        score += (3 - idDist) * 80;
+      }
+
+      // Check ticker distance
+      const tickerClean = ticker.split(".")[0]; // remove exchange suffix like .NS
+      const tickerDist = levenshteinDistance(cleanQuery, tickerClean);
+      if (tickerDist <= 2) {
+        score += (3 - tickerDist) * 80;
+      }
+
+      // Check token distances
+      for (const nToken of nameTokens) {
+        if (nToken.length >= 3) {
+          const dist = levenshteinDistance(cleanQuery, nToken);
+          if (dist <= 2) {
+            score += (3 - dist) * 50;
+          }
+        }
+      }
+    }
+
+    return { stock, score };
+  });
+
+  return scored
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.stock)
+    .slice(0, 8); // return top 8 suggestions
+}
+
 // 2. Stock Selection Panel
 export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }) {
-  const [marketStock, setMarketStock] = useState("");
-  const [showManualInput, setShowManualInput] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [customTicker, setCustomTicker] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [marketStock, setMarketStock] = useState("");
 
-  const POPULAR_STOCKS = [
-    { id: "RELIANCE", name: "Reliance Industries (RELIANCE)" },
-    { id: "TCS", name: "Tata Consultancy Services (TCS)" },
-    { id: "HDFCBANK", name: "HDFC Bank (HDFCBANK)" },
-    { id: "BHARTIARTL", name: "Bharti Airtel (BHARTIARTL)" },
-    { id: "ICICIBANK", name: "ICICI Bank (ICICIBANK)" },
-    { id: "INFY", name: "Infosys Limited (INFY)" },
-    { id: "SBIN", name: "State Bank of India (SBIN)" },
-    { id: "ITC", name: "ITC Limited (ITC)" },
-    { id: "HINDUNILVR", name: "Hindustan Unilever (HINDUNILVR)" },
-    { id: "LT", name: "Larsen & Toubro (LT)" },
-    { id: "BAJFINANCE", name: "Bajaj Finance (BAJFINANCE)" },
-    { id: "HCLTECH", name: "HCL Technologies (HCLTECH)" },
-    { id: "MARUTI", name: "Maruti Suzuki (MARUTI)" },
-    { id: "SUNPHARMA", name: "Sun Pharmaceutical (SUNPHARMA)" },
-    { id: "ADANIENT", name: "Adani Enterprises (ADANIENT)" },
-    { id: "KOTAKBANK", name: "Kotak Mahindra Bank (KOTAKBANK)" },
-    { id: "AXISBANK", name: "Axis Bank (AXISBANK)" },
-    { id: "TITAN", name: "Titan Company (TITAN)" },
-    { id: "ULTRACEMCO", name: "UltraTech Cement (ULTRACEMCO)" },
-    { id: "NTPC", name: "NTPC Limited (NTPC)" },
-    { id: "JSWSTEEL", name: "JSW Steel (JSWSTEEL)" },
-    { id: "M&M", name: "Mahindra & Mahindra (M&M)" },
-    { id: "POWERGRID", name: "Power Grid Corporation (POWERGRID)" },
-    { id: "ASIANPAINT", name: "Asian Paints (ASIANPAINT)" },
-    { id: "COALINDIA", name: "Coal India (COALINDIA)" },
-    { id: "ADANIPORTS", name: "Adani Ports & SEZ (ADANIPORTS)" },
-    { id: "BAJAJFINSV", name: "Bajaj Finserv (BAJAJFINSV)" },
-    { id: "TATASTEEL", name: "Tata Steel (TATASTEEL)" },
-    { id: "NESTLEIND", name: "Nestle India (NESTLEIND)" },
-    { id: "DRREDDY", name: "Dr. Reddy's Laboratories (DRREDDY)" },
-    { id: "GRASIM", name: "Grasim Industries (GRASIM)" },
-    { id: "ONGC", name: "Oil & Natural Gas Corporation (ONGC)" },
-    { id: "CIPLA", name: "Cipla (CIPLA)" },
-    { id: "HDFCLIFE", name: "HDFC Life Insurance (HDFCLIFE)" },
-    { id: "HINDALCO", name: "Hindalco Industries (HINDALCO)" },
-    { id: "TECHM", name: "Tech Mahindra (TECHM)" },
-    { id: "BRITANNIA", name: "Britannia Industries (BRITANNIA)" },
-    { id: "WIPRO", name: "Wipro Limited (WIPRO)" },
-    { id: "SBILIFE", name: "SBI Life Insurance (SBILIFE)" },
-    { id: "BPCL", name: "Bharat Petroleum (BPCL)" },
-    { id: "EICHERMOT", name: "Eicher Motors (EICHERMOT)" },
-    { id: "DIVISLAB", name: "Divi's Laboratories (DIVISLAB)" },
-    { id: "LTIM", name: "LTIMindtree (LTIM)" },
-    { id: "BAJAJ-AUTO", name: "Bajaj Auto (BAJAJ-AUTO)" },
-    { id: "HEROMOTOCO", name: "Hero MotoCorp (HEROMOTOCO)" },
-    { id: "SHRIRAMFIN", name: "Shriram Finance (SHRIRAMFIN)" },
-    { id: "APOLLOHOSP", name: "Apollo Hospitals (APOLLOHOSP)" },
-    { id: "TATACONSUM", name: "Tata Consumer Products (TATACONSUM)" },
-    { id: "JIOFIN", name: "Jio Financial Services (JIOFIN)" },
-    // Global US Stocks
-    { id: "AAPL", name: "Apple Inc. (AAPL)" },
-    { id: "MSFT", name: "Microsoft Corp. (MSFT)" },
-    { id: "NVDA", name: "NVIDIA Corp. (NVDA)" },
-    { id: "TSLA", name: "Tesla Inc. (TSLA)" },
-    { id: "GOOGL", name: "Alphabet Inc. (GOOGL)" },
-    { id: "AMZN", name: "Amazon.com Inc. (AMZN)" }
-  ];
+  const containerRef = React.useRef(null);
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      const filtered = fuzzySearchStocks(query, stocks);
+      setSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionSelect = (stock) => {
+    onSelect(stock.id);
+    setSearchQuery("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   const handleMarketSelect = (e) => {
     const val = e.target.value;
@@ -337,11 +436,42 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
     }
   };
 
-  return React.createElement("div", { className: "glass-panel p-6 shadow-xl border border-gray-800/80 mb-6 animate-slide-up" },
+  return React.createElement("div", { ref: containerRef, className: "glass-panel p-6 shadow-xl border border-gray-800/80 mb-6 animate-slide-up relative" },
     React.createElement("h3", { className: "text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2" },
       React.createElement(Icons.Database, { className: "w-4 h-4 text-indigo-400" }),
       " Select Analysis Target"
     ),
+    
+    // Autocomplete Search Bar
+    React.createElement("div", { className: "relative mb-5" },
+      React.createElement("div", { className: "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500" },
+        React.createElement("svg", { className: "w-4 h-4", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: "2" },
+          React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" })
+        )
+      ),
+      React.createElement("input", {
+        type: "text",
+        value: searchQuery,
+        onChange: (e) => handleSearchChange(e.target.value),
+        onFocus: () => { if (searchQuery.trim()) setShowSuggestions(true); },
+        placeholder: "Type company name or ticker (e.g. infosis, microsft, tes, reliance)...",
+        className: "w-full bg-slate-950/70 text-gray-200 border border-gray-800 rounded-lg py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition-all"
+      }),
+      showSuggestions && suggestions.length > 0 && React.createElement("div", { className: "absolute left-0 right-0 mt-1 bg-slate-950 border border-gray-800 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto" },
+        suggestions.map((s) => React.createElement("div", {
+          key: s.id,
+          onClick: () => handleSuggestionSelect(s),
+          className: "px-4 py-2.5 hover:bg-indigo-950/40 cursor-pointer text-sm border-b border-gray-900/50 flex justify-between items-center group transition-colors"
+        },
+          React.createElement("div", { className: "flex flex-col" },
+            React.createElement("span", { className: "font-semibold text-gray-200 group-hover:text-indigo-300" }, s.name),
+            React.createElement("span", { className: "text-[10px] text-gray-500 font-mono mt-0.5" }, `ID: ${s.id.toUpperCase()}`)
+          ),
+          React.createElement("span", { className: "text-xs font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20 group-hover:bg-indigo-500/20 group-hover:text-indigo-300" }, s.ticker)
+        ))
+      )
+    ),
+
     React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-12 gap-4 items-center" },
       // Dropdown column 1 (Pre-loaded / Local Upload)
       React.createElement("div", { className: "md:col-span-5 relative" },
@@ -350,7 +480,7 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
           onChange: (e) => onSelect(e.target.value),
           className: "w-full bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm font-medium transition-all"
         },
-          React.createElement("option", { value: "", disabled: true }, "-- Local Sample Stocks & Uploads --"),
+          React.createElement("option", { value: "", disabled: true }, "-- All Pre-configured Stocks --"),
           stocks.map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
           React.createElement("option", { value: "upload" }, "Upload Custom Factor Dataset (.csv, .xlsx)")
         )
@@ -367,8 +497,8 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
             onChange: handleMarketSelect,
             className: "flex-1 bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm font-medium transition-all"
           },
-            React.createElement("option", { value: "" }, "-- Select Ticker from Market --"),
-            POPULAR_STOCKS.map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
+            React.createElement("option", { value: "" }, "-- Enter Ticker Symbol --"),
+            stocks.filter(s => !s.is_sample).map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
             React.createElement("option", { value: "CUSTOM" }, "Other (Type ticker manually...)")
           ),
           !showManualInput && React.createElement("button", {
@@ -401,6 +531,15 @@ export function UploadComponent({ onUploadSuccess, onClose }) {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // File upload state
+  const [file, setFile] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [columnMapping, setColumnMapping] = useState({});
+  const [selectedSheet, setSelectedSheet] = useState("");
+  const [usePlatformFactors, setUsePlatformFactors] = useState(() => {
+    return localStorage.getItem("fama_use_platform_factors") !== "false";
+  });
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -412,19 +551,112 @@ export function UploadComponent({ onUploadSuccess, onClose }) {
     }
   };
 
-  const processFile = async (file) => {
-    if (!file) return;
-    const isCsv = file.name.endsWith(".csv");
-    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
-    if (!isCsv && !isExcel) {
-      setError("Only CSV and Excel (.xlsx, .xls) files are accepted.");
-      return;
+  const loadPreview = async (selectedFile, sheetName = null) => {
+    setLoading(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    if (sheetName) {
+      formData.append("sheet_name", sheetName);
     }
+
+    try {
+      const response = await fetch("/api/fama-analysis/upload-preview", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || "Error loading preview.");
+      }
+
+      const data = await response.json();
+      setPreviewData(data);
+      setColumnMapping(data.detected_mapping || {});
+      setSelectedSheet(data.active_sheet || "");
+      
+      // Auto-detect factor merge preference if factors are not present
+      const hasAllFactors = data.detected_mapping && 
+                            data.detected_mapping.Rm_Rf && 
+                            data.detected_mapping.SMB && 
+                            data.detected_mapping.HML;
+      const initialMerge = !hasAllFactors;
+      setUsePlatformFactors(initialMerge);
+      localStorage.setItem("fama_use_platform_factors", String(initialMerge));
+    } catch (err) {
+      setError(err.message);
+      setFile(null);
+      setPreviewData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0];
+      setFile(droppedFile);
+      loadPreview(droppedFile);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      loadPreview(selectedFile);
+    }
+  };
+
+  const handleMappingChange = (field, header) => {
+    setColumnMapping(prev => ({
+      ...prev,
+      [field]: header
+    }));
+  };
+
+  const executeAnalysis = async () => {
+    if (!file) return;
     setLoading(true);
     setError(null);
 
+    // Mappings validation
+    if (!columnMapping.Date) {
+      setError("Please map the 'Date' column.");
+      setLoading(false);
+      return;
+    }
+    if (!columnMapping.Ri_Rf && !columnMapping.Close) {
+      setError("Please map either 'Stock Excess Return (Ri_Rf)' or 'Close Price'.");
+      setLoading(false);
+      return;
+    }
+    if (!usePlatformFactors) {
+      if (!columnMapping.Rm_Rf || !columnMapping.SMB || !columnMapping.HML) {
+        setError("Please map all factor columns (Rm_Rf, SMB, HML) or enable 'Merge with Platform Factors'.");
+        setLoading(false);
+        return;
+      }
+    }
+
     const formData = new FormData();
     formData.append("file", file);
+    if (selectedSheet) {
+      formData.append("sheet_name", selectedSheet);
+    }
+
+    const mappingToSend = { ...columnMapping };
+    if (usePlatformFactors) {
+      mappingToSend.Rm_Rf = "";
+      mappingToSend.SMB = "";
+      mappingToSend.HML = "";
+    }
+
+    formData.append("column_mapping", JSON.stringify(mappingToSend));
 
     try {
       const response = await fetch("/api/fama-analysis/upload", {
@@ -446,27 +678,244 @@ export function UploadComponent({ onUploadSuccess, onClose }) {
     }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+  const getConfidenceBadge = (field) => {
+    const mappedHeader = columnMapping[field];
+    if (!mappedHeader) {
+      return React.createElement("span", { className: "text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-900 border border-gray-800 text-gray-500" }, "Not Mapped");
     }
+    const detectedHeader = previewData && previewData.detected_mapping && previewData.detected_mapping[field];
+    if (mappedHeader === detectedHeader) {
+      return React.createElement("span", { className: "text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" }, "Auto-matched");
+    }
+    return React.createElement("span", { className: "text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400" }, "Manual");
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
+  const renderUploadStep = () => {
+    return React.createElement("div", { className: "p-6" },
+      React.createElement("div", {
+        onDragEnter: handleDrag,
+        onDragOver: handleDrag,
+        onDragLeave: handleDrag,
+        onDrop: handleDrop,
+        className: `border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+          dragActive 
+            ? "border-indigo-500 bg-indigo-500/5" 
+            : "border-gray-800 bg-slate-950/30 hover:border-gray-700 hover:bg-slate-950/50"
+        }`,
+        onClick: () => document.getElementById("file-upload").click()
+      },
+        React.createElement("input", { 
+          id: "file-upload", 
+          type: "file", 
+          accept: ".csv, .xlsx, .xls", 
+          className: "hidden", 
+          onChange: handleFileChange,
+          disabled: loading
+        }),
+        loading ? React.createElement("div", { className: "flex flex-col items-center gap-3 py-4" },
+          React.createElement(Icons.Loader, { className: "w-10 h-10 text-indigo-400 animate-spin" }),
+          React.createElement("p", { className: "text-sm text-indigo-300 font-medium font-sans" }, "Inspecting file structure...")
+        ) : React.createElement(React.Fragment, {},
+          React.createElement("div", { className: "bg-indigo-500/10 p-4 rounded-full mb-4 text-indigo-400" },
+            React.createElement(Icons.Upload, { className: "w-8 h-8" })
+          ),
+          React.createElement("h4", { className: "text-sm font-semibold text-gray-200 mb-1" }, "Drag and drop your CSV or Excel file here"),
+          React.createElement("p", { className: "text-xs text-gray-400 mb-4" }, "or click to browse your local machine"),
+          React.createElement("div", { className: "bg-slate-900 border border-gray-800 px-3 py-1.5 rounded text-[11px] text-gray-400 font-mono" },
+            "Dynamic headers supported. We auto-detect columns!"
+          )
+        )
+      ),
+      error && React.createElement("div", { className: "mt-4 p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-lg text-xs flex gap-2.5 items-start" },
+        React.createElement("div", { className: "text-rose-400 mt-0.5" }, React.createElement(Icons.Alert, {})),
+        React.createElement("div", {},
+          React.createElement("p", { className: "font-semibold mb-0.5" }, "Upload Failed"),
+          React.createElement("p", { className: "leading-relaxed" }, error)
+        )
+      ),
+      React.createElement("div", { className: "mt-6 flex justify-end gap-3" },
+        React.createElement("button", {
+          onClick: onClose,
+          className: "px-4 py-2 border border-gray-800 hover:bg-slate-900 hover:border-gray-700 text-gray-300 font-semibold rounded-lg text-xs transition-colors"
+        }, "Cancel")
+      )
+    );
   };
+
+  const renderPreviewStep = () => {
+    if (!previewData) return null;
+    const { filename, is_excel, sheets, headers, preview_rows } = previewData;
+
+    const fieldsToMap = [
+      { key: "Date", label: "Date Column", desc: "Select trading or calendar date series", required: true },
+      { key: "Close", label: "Close Price", desc: "For calculating stock returns (if return column missing)", required: false },
+      { key: "Ri_Rf", label: "Excess Return (Ri-Rf)", desc: "Direct stock excess return percentage (if already computed)", required: false },
+      { key: "Rm_Rf", label: "Market Excess Return (Rm-Rf)", desc: "Market premium index excess returns", required: false, factor: true },
+      { key: "SMB", label: "Size Factor (SMB)", desc: "Fama-French small-cap minus big-cap factor", required: false, factor: true },
+      { key: "HML", label: "Value Factor (HML)", desc: "Fama-French high book-to-market minus low factor", required: false, factor: true },
+      { key: "Volume", label: "Traded Volume", desc: "Total traded shares volume (optional)", required: false },
+      { key: "Ticker", label: "Stock Ticker", desc: "Stock identifier symbol column (optional)", required: false }
+    ];
+
+    // Filter factors if merge is checked
+    const visibleFields = fieldsToMap.filter(f => !f.factor || !usePlatformFactors);
+
+    return React.createElement("div", { className: "flex flex-col h-full max-h-[80vh]" },
+      React.createElement("div", { className: "p-6 overflow-y-auto flex-1 space-y-6" },
+        
+        // Metadata / Selection Bar
+        React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-900/40 p-4 rounded-xl border border-gray-850" },
+          // Sheets selector
+          is_excel && sheets && sheets.length > 1 && React.createElement("div", { className: "flex flex-col gap-1.5" },
+            React.createElement("label", { className: "text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1" },
+              React.createElement("span", {}, "Worksheet Selector"),
+              React.createElement(HelpTooltip, { text: "This Excel workbook contains multiple worksheets. Select the one with your analysis dataset." })
+            ),
+            React.createElement("select", {
+              value: selectedSheet,
+              onChange: (e) => {
+                setSelectedSheet(e.target.value);
+                loadPreview(file, e.target.value);
+              },
+              className: "w-full bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2 px-3 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-indigo-500"
+            },
+              sheets.map(sh => React.createElement("option", { key: sh, value: sh }, sh))
+            )
+          ),
+          
+          // Platform factors toggle
+          React.createElement("div", { className: "flex items-center gap-2.5 h-full pt-4 md:pt-0" },
+            React.createElement("label", { className: "relative inline-flex items-center cursor-pointer select-none" },
+              React.createElement("input", {
+                type: "checkbox",
+                checked: usePlatformFactors,
+                onChange: (e) => {
+                  setUsePlatformFactors(e.target.checked);
+                  localStorage.setItem("fama_use_platform_factors", String(e.target.checked));
+                },
+                className: "sr-only peer"
+              }),
+              React.createElement("div", { className: "w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600" }),
+              React.createElement("div", { className: "ml-3" },
+                React.createElement("span", { className: "text-xs font-semibold text-gray-200 block" }, "Use Platform Fama-French Factors"),
+                React.createElement("span", { className: "text-[10px] text-gray-400 font-normal" }, "Auto-merge Rm-Rf, SMB, HML factors from server")
+              )
+            ),
+            React.createElement(HelpTooltip, { text: "Toggle this ON to use baseline market factor statistics. This removes the need to supply Rm_Rf, SMB, and HML factors in your uploaded spreadsheet." })
+          )
+        ),
+
+        // Mapping selector grid
+        React.createElement("div", {},
+          React.createElement("h4", { className: "text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5 font-mono" },
+            React.createElement("span", { className: "w-1.5 h-1.5 rounded-full bg-indigo-500" }),
+            "Configure Column Mapping Intelligence"
+          ),
+          React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" },
+            visibleFields.map(field => React.createElement("div", { 
+              key: field.key,
+              className: "p-3.5 bg-slate-950/40 rounded-xl border border-gray-900/60 flex flex-col justify-between gap-2.5"
+            },
+              React.createElement("div", {},
+                React.createElement("div", { className: "flex justify-between items-center gap-2 mb-1" },
+                  React.createElement("span", { className: "text-xs font-bold text-gray-200" }, 
+                    field.label,
+                    field.required && React.createElement("span", { className: "text-rose-500 ml-0.5" }, "*")
+                  ),
+                  getConfidenceBadge(field.key)
+                ),
+                React.createElement("span", { className: "text-[10px] text-gray-500 font-normal leading-tight block" }, field.desc)
+              ),
+              React.createElement("select", {
+                value: columnMapping[field.key] || "",
+                onChange: (e) => handleMappingChange(field.key, e.target.value),
+                className: "w-full bg-slate-950 text-xs text-gray-300 border border-gray-800 rounded-lg py-2 px-3 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-medium cursor-pointer"
+              },
+                React.createElement("option", { value: "" }, field.required ? "-- Select Required Column --" : "-- Not Mapped (Ignore) --"),
+                headers.map(h => React.createElement("option", { key: h, value: h }, h))
+              )
+            ))
+          )
+        ),
+
+        // Data Preview Table
+        React.createElement("div", {},
+          React.createElement("h4", { className: "text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5 font-mono" },
+            React.createElement("span", { className: "w-1.5 h-1.5 rounded-full bg-indigo-500" }),
+            "Dataset Preview (First 5 Rows)"
+          ),
+          React.createElement("div", { className: "overflow-x-auto border border-gray-850 rounded-xl bg-slate-950/20" },
+            React.createElement("table", { className: "w-full text-left border-collapse text-xs font-normal" },
+              React.createElement("thead", {},
+                React.createElement("tr", { className: "border-b border-gray-850 bg-slate-950/50 text-[10px] uppercase font-bold text-gray-500 tracking-wider" },
+                  headers.map(h => React.createElement("th", { key: h, className: "py-2 px-4 whitespace-nowrap" }, h))
+                )
+              ),
+              React.createElement("tbody", { className: "divide-y divide-gray-900/60" },
+                preview_rows.map((row, idx) => React.createElement("tr", { key: idx, className: "hover:bg-slate-900/10 transition-colors" },
+                  headers.map(h => React.createElement("td", { key: h, className: "py-2.5 px-4 font-mono text-gray-400 whitespace-nowrap" }, 
+                    typeof row[h] === 'number' ? row[h].toFixed(4) : String(row[h])
+                  ))
+                ))
+              )
+            )
+          )
+        ),
+
+        error && React.createElement("div", { className: "p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-lg text-xs flex gap-2.5 items-start" },
+          React.createElement("div", { className: "text-rose-400 mt-0.5" }, React.createElement(Icons.Alert, {})),
+          React.createElement("div", {},
+            React.createElement("p", { className: "font-semibold mb-0.5" }, "Configuration Warning"),
+            React.createElement("p", { className: "leading-relaxed" }, error)
+          )
+        )
+
+      ),
+      
+      // Modal Actions Footer
+      React.createElement("div", { className: "px-6 py-4 bg-slate-900 border-t border-gray-850 flex justify-between items-center" },
+        React.createElement("button", {
+          onClick: () => {
+            setFile(null);
+            setPreviewData(null);
+            setError(null);
+          },
+          className: "px-4 py-2 border border-gray-800 hover:bg-slate-800 hover:border-gray-700 text-gray-300 font-semibold rounded-lg text-xs transition-colors"
+        }, "← Back to Upload"),
+        
+        React.createElement("div", { className: "flex gap-3" },
+          React.createElement("button", {
+            onClick: onClose,
+            className: "px-4 py-2 border border-gray-850 hover:bg-slate-800 hover:border-gray-700 text-gray-400 hover:text-white font-semibold rounded-lg text-xs transition-colors"
+          }, "Cancel"),
+          
+          React.createElement("button", {
+            onClick: executeAnalysis,
+            disabled: loading,
+            className: "bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2 rounded-lg text-xs transition-all active:scale-95 border border-indigo-500/20 shadow-lg shadow-indigo-950/30 flex items-center gap-1.5"
+          },
+            loading ? React.createElement(React.Fragment, {}, 
+              React.createElement(Icons.Loader, { className: "w-3.5 h-3.5 text-white animate-spin" }), 
+              " Running Regression..."
+            ) : "Run Regression Analysis"
+          )
+        )
+      )
+    );
+  };
+
+  const isPreviewStep = previewData !== null;
 
   return React.createElement("div", { className: "fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" },
-    React.createElement("div", { className: "glass-panel w-full max-w-lg overflow-hidden border border-gray-800 shadow-2xl animate-slide-up" },
+    React.createElement("div", { 
+      className: `glass-panel w-full overflow-hidden border border-gray-800 shadow-2xl animate-slide-up transition-all duration-350 ${
+        isPreviewStep ? "max-w-4xl" : "max-w-lg"
+      }` 
+    },
       React.createElement("div", { className: "px-6 py-4 bg-slate-900 border-b border-gray-800 flex items-center justify-between" },
         React.createElement("h3", { className: "text-base font-bold text-white flex items-center gap-2" },
           React.createElement(Icons.Upload, { className: "w-5 h-5 text-indigo-400" }),
-          " Upload Factor Dataset"
+          isPreviewStep ? "Configure Analysis Dataset Structure" : "Upload Factor Dataset"
         ),
         React.createElement("button", { 
           onClick: onClose,
@@ -477,55 +926,7 @@ export function UploadComponent({ onUploadSuccess, onClose }) {
           )
         )
       ),
-      React.createElement("div", { className: "p-6" },
-        React.createElement("div", {
-          onDragEnter: handleDrag,
-          onDragOver: handleDrag,
-          onDragLeave: handleDrag,
-          onDrop: handleDrop,
-          className: `border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-            dragActive 
-              ? "border-indigo-500 bg-indigo-500/5" 
-              : "border-gray-800 bg-slate-950/30 hover:border-gray-700 hover:bg-slate-950/50"
-          }`,
-          onClick: () => document.getElementById("file-upload").click()
-        },
-          React.createElement("input", { 
-            id: "file-upload", 
-            type: "file", 
-            accept: ".csv, .xlsx, .xls", 
-            className: "hidden", 
-            onChange: handleFileChange,
-            disabled: loading
-          }),
-          loading ? React.createElement("div", { className: "flex flex-col items-center gap-3 py-4" },
-            React.createElement(Icons.Loader, { className: "w-10 h-10 text-indigo-400" }),
-            React.createElement("p", { className: "text-sm text-indigo-300 font-medium" }, "Running OLS Regression Analysis...")
-          ) : React.createElement(React.Fragment, {},
-            React.createElement("div", { className: "bg-indigo-500/10 p-4 rounded-full mb-4 text-indigo-400" },
-              React.createElement(Icons.Upload, { className: "w-8 h-8" })
-            ),
-            React.createElement("h4", { className: "text-sm font-semibold text-gray-200 mb-1" }, "Drag and drop your CSV or Excel file here"),
-            React.createElement("p", { className: "text-xs text-gray-400 mb-4" }, "or click to browse your local machine"),
-            React.createElement("div", { className: "bg-slate-900 border border-gray-800 px-3 py-1.5 rounded text-[11px] text-gray-400 font-mono" },
-              "Expected Columns: Date, Ri_Rf, Rm_Rf, SMB, HML"
-            )
-          )
-        ),
-        error && React.createElement("div", { className: "mt-4 p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-lg text-xs flex gap-2.5 items-start" },
-          React.createElement("div", { className: "text-rose-400 mt-0.5" }, React.createElement(Icons.Alert, {})),
-          React.createElement("div", {},
-            React.createElement("p", { className: "font-semibold mb-0.5" }, "Upload Failed"),
-            React.createElement("p", { className: "leading-relaxed" }, error)
-          )
-        ),
-        React.createElement("div", { className: "mt-6 flex justify-end gap-3" },
-          React.createElement("button", {
-            onClick: onClose,
-            className: "px-4 py-2 border border-gray-800 hover:bg-slate-900 hover:border-gray-700 text-gray-300 font-semibold rounded-lg text-xs transition-colors"
-          }, "Cancel")
-        )
-      )
+      isPreviewStep ? renderPreviewStep() : renderUploadStep()
     )
   );
 }
