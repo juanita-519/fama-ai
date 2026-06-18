@@ -385,6 +385,7 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
   const [marketStock, setMarketStock] = useState("");
 
   const containerRef = React.useRef(null);
+  const safeStocks = Array.isArray(stocks) ? stocks : [];
 
   // Close suggestions on click outside
   useEffect(() => {
@@ -400,7 +401,7 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
   const handleSearchChange = (query) => {
     setSearchQuery(query);
     if (query.trim()) {
-      const filtered = fuzzySearchStocks(query, stocks);
+      const filtered = fuzzySearchStocks(query, safeStocks);
       setSuggestions(filtered);
       setShowSuggestions(true);
     } else {
@@ -481,7 +482,7 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
           className: "w-full bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm font-medium transition-all"
         },
           React.createElement("option", { value: "", disabled: true }, "-- All Pre-configured Stocks --"),
-          stocks.map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
+          safeStocks.map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
           React.createElement("option", { value: "upload" }, "Upload Custom Factor Dataset (.csv, .xlsx)")
         )
       ),
@@ -498,7 +499,7 @@ export function StockSelector({ stocks, selectedStock, onSelect, onUploadClick }
             className: "flex-1 bg-slate-950 text-gray-200 border border-gray-800 rounded-lg py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm font-medium transition-all"
           },
             React.createElement("option", { value: "" }, "-- Enter Ticker Symbol --"),
-            stocks.filter(s => !s.is_sample).map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
+            safeStocks.filter(s => !s.is_sample).map((stock) => React.createElement("option", { key: stock.id, value: stock.id }, stock.name)),
             React.createElement("option", { value: "CUSTOM" }, "Other (Type ticker manually...)")
           ),
           !showManualInput && React.createElement("button", {

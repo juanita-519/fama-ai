@@ -46,7 +46,7 @@
   { "id": "BAJAJ-AUTO", "name": "Bajaj Auto Limited", "ticker": "BAJAJ-AUTO.NS", "is_sample": false },
   { "id": "HEROMOTOCO", "name": "Hero MotoCorp Limited", "ticker": "HEROMOTOCO.NS", "is_sample": false },
   { "id": "SHRIRAMFIN", "name": "Shriram Finance Limited", "ticker": "SHRIRAMFIN.NS", "is_sample": false },
-  { "id": "APOLLOHOSP", name: "Apollo Hospitals Enterprise Limited", "ticker": "APOLLOHOSP.NS", "is_sample": false },
+  { "id": "APOLLOHOSP", "name": "Apollo Hospitals Enterprise Limited", "ticker": "APOLLOHOSP.NS", "is_sample": false },
   { "id": "TATACONSUM", "name": "Tata Consumer Products Limited", "ticker": "TATACONSUM.NS", "is_sample": false },
   { "id": "JIOFIN", "name": "Jio Financial Services Limited", "ticker": "JIOFIN.NS", "is_sample": false },
   { "id": "AAPL", "name": "Apple Inc.", "ticker": "AAPL", "is_sample": false },

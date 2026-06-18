@@ -202,11 +202,20 @@ function App() {
   // Load stocks
   useEffect(() => {
     fetch("/api/stocks")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          throw new Error("Failed to retrieve pre-configured stocks list.");
+        }
+        return res.json();
+      })
       .then(data => {
-        setStocks(data);
-        if (data.length > 0) {
-          handleStockChange(data[0].id);
+        if (Array.isArray(data)) {
+          setStocks(data);
+          if (data.length > 0) {
+            handleStockChange(data[0].id);
+          }
+        } else {
+          throw new Error("Received invalid format for stocks list.");
         }
       })
       .catch(err => setError(err.message));
